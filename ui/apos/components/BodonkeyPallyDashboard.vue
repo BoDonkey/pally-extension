@@ -17,8 +17,7 @@
       <AposModalBody>
         <template #bodyMain>
           <div>
-            <h1>Donkey Pally Dashboard</h1>
-            <p>Donkey Pally Dashboard is a dashboard for Donkey Pally.</p>
+            <iframe src="http://localhost:4000" width="100%" height="800px"></iframe>
           </div>
         </template>
       </AposModalBody>

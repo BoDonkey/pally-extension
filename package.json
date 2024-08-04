@@ -1,0 +1,14 @@
+{
+  "name": "pally-extension",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "pa11y-dashboard": "github:pa11y/pa11y-dashboard"
+  }
+}

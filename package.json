@@ -1,13 +1,13 @@
 {
-  "name": "pally-extension",
+  "name": "@bodonkey/pally-extension",
   "version": "1.0.0",
-  "description": "",
+  "description": "This extension adds the pa11y-dashboard to your ApostropheCMS project",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "pa11y-dashboard": "github:pa11y/pa11y-dashboard"
   }

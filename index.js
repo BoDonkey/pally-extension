@@ -5,10 +5,12 @@ module.exports = {
   extend: '@apostrophecms/doc-type',
   options: {
     label: 'pally-extension',
+    port: process.env.WEBSERVICE_PORT || 3001,
   },
   init(self) {
+    const port = self.options.port;
     // Start the pa11y-dashboard server
-    const dashboardProcess = exec('WEBSERVICE_PORT=3001 node ../pa11y-dashboard/index.js');
+    const dashboardProcess = exec(`WEBSERVICE_PORT=${port} node ../pa11y-dashboard/index.js`);
 
     dashboardProcess.stdout.on('data', (data) => {
       console.log(`pa11y-dashboard: ${data}`);
@@ -19,8 +21,6 @@ module.exports = {
     });
     self.addToAdminBar();
     self.addManagerModal();
-    self.enableBrowserData();
-
   },
   methods(self) {
     return {
@@ -37,16 +37,6 @@ module.exports = {
           'pally-dashboard',
           'pally-dashboard'
         );
-      }
-    }
-  },
-  extendMethods(self) {
-    return {
-      getBrowserData(_super, req) {
-        const browserOptions = _super(req);
-        _.defaults(browserOptions.components, {
-          managerModal: self.getComponentName('managerModal', 'BodonkeyPallyDashboard')
-        });
       }
     }
   }

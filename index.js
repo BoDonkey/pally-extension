@@ -1,5 +1,6 @@
 const _ = require('lodash');
 const { exec } = require('child_process');
+const path = require('path');
 
 module.exports = {
   extend: '@apostrophecms/doc-type',
@@ -10,7 +11,9 @@ module.exports = {
   init(self) {
     const port = self.options.port;
     // Start the pa11y-dashboard server
-    const dashboardProcess = exec(`WEBSERVICE_PORT=${port} node ../pa11y-dashboard/index.js`);
+    const dashboardPath = path.resolve(__dirname, '../../pa11y-dashboard/index.js');
+    const dashboardProcess = exec(`WEBSERVICE_PORT=${port} node ${dashboardPath}`);
+
 
     dashboardProcess.stdout.on('data', (data) => {
       console.log(`pa11y-dashboard: ${data}`);

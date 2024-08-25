@@ -21,7 +21,7 @@ module.exports = {
         currentPort: self.options.startingPort
       };
     }
-    console.log('currentWebservicePort', self.apos.pallyPorts.currentWebservicePort);
+    console.log('currentWebservicePort', self.apos.pallyPorts.currentPort);
 
     // Find available ports for this site instance
     findAvailablePorts(self.apos.pallyPorts.currentWebservicePort, self.apos.pallyPorts.currentPort, self.options.portIncrementStep)
@@ -41,14 +41,6 @@ module.exports = {
         // Increment the ports for the next site
         self.apos.pallyPorts.currentWebservicePort = webservicePort + self.options.portIncrementStep;
         self.apos.pallyPorts.currentPort = port + self.options.portIncrementStep;
-
-        // Add pallyPorts to the template helpers after the ports have been found
-        self.apos.template.addHelpers({
-          pallyPorts: {
-            webservicePort: webservicePort,
-            port: port
-          }
-        });
 
         self.addToAdminBar();
         self.addManagerModal();
@@ -74,6 +66,17 @@ module.exports = {
         );
       }
     };
+  },
+  extendMethods(self) {
+    return {
+      getBrowserData(_super, req) {
+        const browserData = _super(req);
+        return {
+          ...browserData,
+          pallyPort: self.apos.pallyPorts.currentPort
+        };
+      }
+    }
   }
 };
 

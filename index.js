@@ -7,8 +7,8 @@ module.exports = {
   extend: '@apostrophecms/doc-type',
   options: {
     label: 'pally-extension',
-    startingWebservicePort: parseInt(process.env.STARTING_WEBSERVICE_PORT) || 3001,
-    startingPort: parseInt(process.env.STARTING_PORT) || 4001,
+    startingWebservicePort: parseInt(process.env.STARTING_WEBSERVICE_PORT) || 3002,
+    startingPort: parseInt(process.env.STARTING_PORT) || 40012,
     portIncrementStep: 2 // Adjust this as needed
   },
   init(self) {

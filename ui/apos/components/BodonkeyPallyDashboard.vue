@@ -47,6 +47,7 @@ export default {
   async mounted() {
     this.modal.active = true;
     this.modal.triggerFocusRefresh++;
+    console.log('mounted', self.apos.pallyPorts);
   }
 };
 </script>

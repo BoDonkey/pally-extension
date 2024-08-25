@@ -15,6 +15,7 @@ module.exports = {
     // Initialize global port tracking if not already present
     if (!self.apos.pallyPorts) {
       console.log('adding to self.apos');
+      self.apos.billy = 'billy';
       self.apos.pallyPorts = {
         currentWebservicePort: self.options.startingWebservicePort,
         currentPort: self.options.startingPort

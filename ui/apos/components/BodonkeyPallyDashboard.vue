@@ -17,7 +17,7 @@
       <AposModalBody>
         <template #bodyMain>
           <div>
-            <iframe src="http://localhost:4000" width="100%" height="800px"></iframe>
+            <iframe src="http://localhost:4002" width="100%" height="800px"></iframe>
           </div>
         </template>
       </AposModalBody>
@@ -47,7 +47,7 @@ export default {
   async mounted() {
     this.modal.active = true;
     this.modal.triggerFocusRefresh++;
-    console.log('mounted', self.apos.pallyPorts);
+    console.log('mounted', self.apos);
   }
 };
 </script>

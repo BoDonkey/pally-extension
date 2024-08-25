@@ -8,7 +8,7 @@ module.exports = {
   options: {
     label: 'pally-extension',
     startingWebservicePort: parseInt(process.env.STARTING_WEBSERVICE_PORT) || 3002,
-    startingPort: parseInt(process.env.STARTING_PORT) || 40012,
+    startingPort: parseInt(process.env.STARTING_PORT) || 4002,
     portIncrementStep: 2 // Adjust this as needed
   },
   init(self) {

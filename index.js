@@ -48,6 +48,12 @@ module.exports = {
       .catch((error) => {
         console.error(`Error finding available ports: ${error}`);
       });
+      
+      self.apos.template.addHelpers({
+        pallyPorts: {
+          webservicePort: webservicePort,
+          port: port
+        }
   },
   methods(self) {
     return {

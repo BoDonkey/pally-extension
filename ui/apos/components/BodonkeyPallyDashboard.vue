@@ -37,6 +37,7 @@ export default {
         showModal: false,
         width: 'full',
       },
+      pallyPorts: null
     }
   },
   methods: {
@@ -47,7 +48,11 @@ export default {
   async mounted() {
     this.modal.active = true;
     this.modal.triggerFocusRefresh++;
-    console.log('mounted', self.apos);
+    // Retrieve pallyPorts from the global data added by ApostropheCMS
+    this.pallyPorts = window.apos.data.pallyPorts;
+
+    // Log to verify that pallyPorts are available
+    console.log('Pally Ports:', this.pallyPorts);
   }
 };
 </script>

@@ -14,11 +14,13 @@ module.exports = {
   init(self) {
     // Initialize global port tracking if not already present
     if (!self.apos.pallyPorts) {
+      console.log('adding to self.apos');
       self.apos.pallyPorts = {
         currentWebservicePort: self.options.startingWebservicePort,
         currentPort: self.options.startingPort
       };
     }
+    console.log('currentWebservicePort', self.apos.pallyPorts.currentWebservicePort);
 
     // Find available ports for this site instance
     findAvailablePorts(self.apos.pallyPorts.currentWebservicePort, self.apos.pallyPorts.currentPort, self.options.portIncrementStep)

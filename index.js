@@ -42,19 +42,20 @@ module.exports = {
         self.apos.pallyPorts.currentWebservicePort = webservicePort + self.options.portIncrementStep;
         self.apos.pallyPorts.currentPort = port + self.options.portIncrementStep;
 
+        // Add pallyPorts to the template helpers after the ports have been found
+        self.apos.template.addHelpers({
+          pallyPorts: {
+            webservicePort: webservicePort,
+            port: port
+          }
+        });
+
         self.addToAdminBar();
         self.addManagerModal();
       })
       .catch((error) => {
         console.error(`Error finding available ports: ${error}`);
       });
-
-    self.apos.template.addHelpers({
-      pallyPorts: {
-        webservicePort: webservicePort,
-        port: port
-      }
-    });
   },
   methods(self) {
     return {

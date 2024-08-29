@@ -49,7 +49,7 @@ export default {
     this.modal.active = true;
     this.modal.triggerFocusRefresh++;
     // Retrieve pallyPorts from the global data added by ApostropheCMS
-    this.pallyPort = window.apos.data?.pallyPort;
+    this.pallyPort = window.apos?.pallyPort;
 
     // Log to verify that pallyPorts are available
     console.log('Pally Ports:', this.pallyPort);

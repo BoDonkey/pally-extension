@@ -17,7 +17,7 @@
       <AposModalBody>
         <template #bodyMain>
           <div>
-            <iframe src="http://localhost:4002" width="100%" height="800px"></iframe>
+            <iframe :src="dashboardUrl" width="100%" height="800px"></iframe>
           </div>
         </template>
       </AposModalBody>
@@ -37,7 +37,12 @@ export default {
         showModal: false,
         width: 'full',
       },
-      pallyPorts: null
+      pallyPort: null
+    }
+  },
+  computed: {
+    dashboardUrl() {
+      return this.pallyPort ? `http://localhost:${this.moduleOptions.pallyPort}` : '';
     }
   },
   methods: {
@@ -49,9 +54,9 @@ export default {
     this.modal.active = true;
     this.modal.triggerFocusRefresh++;
     // Retrieve pallyPorts from the global data added by ApostropheCMS
-
+    this.pallyPort = this.moduleOptions.pallyPort;
     // Log to verify that pallyPorts are available
-    console.log('Pally Ports:', this.moduleOptions.pallyPort);
+    console.log('Pally Ports:', this.pallyPort);
   }
 };
 </script>

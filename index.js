@@ -26,6 +26,7 @@ module.exports = {
     // Find available ports for this site instance
     findAvailablePorts(self.apos.pallyPorts.currentWebservicePort, self.apos.pallyPorts.currentPort, self.options.portIncrementStep)
       .then(({ webservicePort, port }) => {
+        self.sitePort = port;
         // Start the pa11y-dashboard server with the assigned ports
         const dashboardPath = path.resolve(__dirname, '../../pa11y-dashboard/index.js');
         const dashboardProcess = exec(`WEBSERVICE_PORT=${webservicePort} PORT=${port} node ${dashboardPath}`);
@@ -73,7 +74,7 @@ module.exports = {
         const browserData = _super(req);
         return {
           ...browserData,
-          pallyPort: self.apos.pallyPorts.currentPort
+          pallyPort: self.sitePort
         };
       }
     }

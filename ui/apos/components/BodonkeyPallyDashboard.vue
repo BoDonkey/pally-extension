@@ -28,6 +28,13 @@
 <script>
 export default {
   name: 'BodonkeyPallyDashboard',
+  props: {
+    pallyPort: {
+      type: Number,
+      required: true,
+      default: 4002
+    }
+  },
   data() {
     return {
       modal: {
@@ -36,13 +43,12 @@ export default {
         type: 'slide',
         showModal: false,
         width: 'full',
-      },
-      pallyPort: null
+      }
     }
   },
   computed: {
     dashboardUrl() {
-      return this.pallyPort ? `http://localhost:${this.moduleOptions.pallyPort}` : '';
+      return this.pallyPort ? `http://localhost:${this.pallyPort}` : '';
     }
   },
   methods: {
@@ -53,10 +59,6 @@ export default {
   async mounted() {
     this.modal.active = true;
     this.modal.triggerFocusRefresh++;
-    // Retrieve pallyPorts from the global data added by ApostropheCMS
-    this.pallyPort = this.moduleOptions.pallyPort;
-    // Log to verify that pallyPorts are available
-    console.log('Pally Ports:', this.pallyPort);
   }
 };
 </script>

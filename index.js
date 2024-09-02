@@ -7,6 +7,7 @@ module.exports = {
   extend: '@apostrophecms/doc-type',
   options: {
     label: 'pally-extension',
+    alias: 'pallyExtension',
     startingWebservicePort: parseInt(process.env.STARTING_WEBSERVICE_PORT) || 3002,
     startingPort: parseInt(process.env.STARTING_PORT) || 4002,
     portIncrementStep: 2 // Adjust this as needed
@@ -14,8 +15,6 @@ module.exports = {
   init(self) {
     // Initialize global port tracking if not already present
     if (!self.apos.pallyPorts) {
-      console.log('adding to self.apos');
-      self.apos.billy = 'billy';
       self.apos.pallyPorts = {
         currentWebservicePort: self.options.startingWebservicePort,
         currentPort: self.options.startingPort
@@ -23,12 +22,15 @@ module.exports = {
     }
     console.log('currentWebservicePort', self.apos.pallyPorts.currentPort);
 
+    const databaseName = `pally_db_${self.apos.task.getSite().alias}`;
+    CSSConditionRule.log('databaseName!!!!!!!!!!!!!!!!!!!!', databaseName);
+
     // Find available ports for this site instance
     findAvailablePorts(self.apos.pallyPorts.currentWebservicePort, self.apos.pallyPorts.currentPort, self.options.portIncrementStep)
       .then(({ webservicePort, port }) => {
         self.sitePort = port;
         // Start the pa11y-dashboard server with the assigned ports
-        const dashboardPath = path.resolve(__dirname, '../../pa11y-dashboard/index.js');
+        const dashboardPath = require.resolve('pa11y-dashboard/index.js');
         const dashboardProcess = exec(`WEBSERVICE_PORT=${webservicePort} PORT=${port} node ${dashboardPath}`);
 
         dashboardProcess.stdout.on('data', (data) => {
@@ -52,12 +54,15 @@ module.exports = {
   },
   methods(self) {
     return {
+      async enableCollection() {
+        self.db = await self.apos.db.collection('aposDocsVersions');
+      },
       addManagerModal() {
         console.log('Adding manager');
         self.apos.modal.add(
           `pally-dashboard`,
           self.getComponentName('managerModal', 'BodonkeyPallyDashboard'),
-          { moduleName: 'BodonkeyPallyDashboard' }
+          { moduleName: 'BodonkeyPallyDashboard', pallyPort: self.sitePort }
         );
       },
       addToAdminBar() {
@@ -67,17 +72,6 @@ module.exports = {
         );
       }
     };
-  },
-  extendMethods(self) {
-    return {
-      getBrowserData(_super, req) {
-        const browserData = _super(req);
-        return {
-          ...browserData,
-          pallyPort: self.sitePort
-        };
-      }
-    }
   }
 };
 

@@ -1,68 +1,26 @@
 const _ = require('lodash');
-const { exec } = require('child_process');
-const path = require('path');
-const net = require('net');
+const pa11y = require('pa11y');
+const { v4: uuidv4 } = require('uuid');
 
 module.exports = {
   extend: '@apostrophecms/doc-type',
   options: {
     label: 'pally-extension',
-    alias: 'pallyExtension',
-    startingWebservicePort: parseInt(process.env.STARTING_WEBSERVICE_PORT) || 3002,
-    startingPort: parseInt(process.env.STARTING_PORT) || 4002,
-    portIncrementStep: 2 // Adjust this as needed
+    alias: 'pallyExtension'
   },
-  init(self) {
-    // Initialize global port tracking if not already present
-    if (!self.apos.pallyPorts) {
-      self.apos.pallyPorts = {
-        currentWebservicePort: self.options.startingWebservicePort,
-        currentPort: self.options.startingPort
-      };
-    }
-    console.log('currentWebservicePort', self.apos.pallyPorts.currentPort);
-
-    const databaseName = `pally_db_${self.apos.task.getSite().alias}`;
-    CSSConditionRule.log('databaseName!!!!!!!!!!!!!!!!!!!!', databaseName);
-
-    // Find available ports for this site instance
-    findAvailablePorts(self.apos.pallyPorts.currentWebservicePort, self.apos.pallyPorts.currentPort, self.options.portIncrementStep)
-      .then(({ webservicePort, port }) => {
-        self.sitePort = port;
-        // Start the pa11y-dashboard server with the assigned ports
-        const dashboardPath = require.resolve('pa11y-dashboard/index.js');
-        const dashboardProcess = exec(`WEBSERVICE_PORT=${webservicePort} PORT=${port} node ${dashboardPath}`);
-
-        dashboardProcess.stdout.on('data', (data) => {
-          console.log(`pa11y-dashboard (port ${port}): ${data}`);
-        });
-
-        dashboardProcess.stderr.on('data', (data) => {
-          console.error(`pa11y-dashboard error (port ${port}): ${data}`);
-        });
-
-        // Increment the ports for the next site
-        self.apos.pallyPorts.currentWebservicePort = webservicePort + self.options.portIncrementStep;
-        self.apos.pallyPorts.currentPort = port + self.options.portIncrementStep;
-
-        self.addToAdminBar();
-        self.addManagerModal();
-      })
-      .catch((error) => {
-        console.error(`Error finding available ports: ${error}`);
-      });
+  async init(self) {
+    self.addManagerModal();
+    self.addToAdminBar();
+    await self.ensurePa11yCollection();
+    await self.ensurePa11yIndexes();
   },
   methods(self) {
     return {
-      async enableCollection() {
-        self.db = await self.apos.db.collection('aposDocsVersions');
-      },
       addManagerModal() {
-        console.log('Adding manager');
         self.apos.modal.add(
           `pally-dashboard`,
           self.getComponentName('managerModal', 'BodonkeyPallyDashboard'),
-          { moduleName: 'BodonkeyPallyDashboard', pallyPort: self.sitePort }
+          { moduleName: 'BodonkeyPallyDashboard' }
         );
       },
       addToAdminBar() {
@@ -70,43 +28,86 @@ module.exports = {
           'pally-dashboard',
           'pally-dashboard'
         );
-      }
+      },
+      async ensurePa11yCollection() {
+        self.resultsCollection = await self.apos.db.createCollection('pa11yResults').catch(() => {
+          // If it already exists, just use it
+          self.resultsCollection = self.apos.db.collection('pa11yResults');
+        });
+      },
+      async ensurePa11yIndexes() {
+        if (!self.resultsCollection) {
+          throw new Error('Pa11y collection not initialized');
+        }
+        await self.resultsCollection.createIndex({ date: 1 });
+        await self.resultsCollection.createIndex({ task: 1 });
+      },
     };
+  },
+  apiRoutes(self) {
+    return {
+      post: {
+        // Route to run a new Pa11y scan
+        async scan(req) {
+          const { url, ruleset = 'WCAG2AA' } = req.body;
+          console.log('Scanning:', url, 'with ruleset:', ruleset);
+          try {
+            const results = await pa11y(url, { standard: ruleset });
+            const resultData = {
+              _id: uuidv4(),
+              url,
+              ruleset,
+              date: new Date(),
+              errorCount: results.issues.filter(issue => issue.type === 'error').length,
+              warningCount: results.issues.filter(issue => issue.type === 'warning').length,
+              noticeCount: results.issues.filter(issue => issue.type === 'notice').length,
+              results: results
+            };
+
+            // Insert the scan results into the MongoDB collection
+            try {
+              await self.resultsCollection.insertOne(resultData);
+            } catch (error) {
+              console.error('Insert failed:', error);
+            }
+            return {
+              resultData
+            };
+          } catch (err) {
+            throw new Error(`Failed to run Pa11y scan: ${err.message}`);
+          }
+        }
+      },
+      get: {
+        // Route to fetch historical Pa11y results
+        async history(req) {
+          const results = await self.apos.db.collection('pa11yResults').find().sort({ date: -1 }).toArray();
+          console.log('History Results:', results);
+          return {
+            success: true,
+            data: results
+          };
+        }
+      },
+      delete: {
+        async clearHistory(req) {
+          try {
+            // Remove all documents from the collection
+            const result = await self.apos.db.collection('pa11yResults').deleteMany({});
+            // Return the count of deleted documents
+            return {
+              success: true,
+              message: `${result.deletedCount} records deleted`
+            };
+          } catch (err) {
+            console.error('Error clearing history:', err);
+            return {
+              success: false,
+              error: err.message
+            };
+          }
+        }
+      }
+    }
   }
 };
-
-// Utility function to check if a port is available
-function checkPortInUse(port) {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-
-    server.once('error', (err) => {
-      if (err.code === 'EADDRINUSE') {
-        resolve(true); // Port is in use
-      } else {
-        reject(err); // Unexpected error
-      }
-    });
-
-    server.once('listening', () => {
-      server.close();
-      resolve(false); // Port is available
-    });
-
-    server.listen(port);
-  });
-}
-
-// Function to find the next available ports
-async function findAvailablePorts(startingWebservicePort, startingPort, incrementStep) {
-  let webservicePort = startingWebservicePort;
-  let port = startingPort;
-
-  // Keep checking and incrementing until both ports are available
-  while (await checkPortInUse(webservicePort) || await checkPortInUse(port)) {
-    webservicePort += incrementStep;
-    port += incrementStep;
-  }
-
-  return { webservicePort, port };
-}

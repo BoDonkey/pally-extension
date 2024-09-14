@@ -22,67 +22,111 @@
               <label for="scanUrl">URL to Scan:</label>
               <input v-model="scanUrl" id="scanUrl" class="form-control" placeholder="Enter URL to scan" />
             </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" v-model="fullScan" />
+                Full Site Scan
+              </label>
+            </div>
             <AposButton label="Run Scan" @click="runScan" />
           </div>
 
-          <div v-if="loading">Running scan...</div>
+          <div v-if="loading">
+            Running scan...
+            <div>{{ scanProgress }}</div>
+          </div>
           <div v-if="error">{{ error }}</div>
           <div v-if="results">
-            <h3>Scan Results for {{ results.url }}</h3>
+            <h3>Scan Results for {{ results.startUrl }}</h3>
             <p>
-              <span class="result-count error">Errors: {{ results.errorCount }}</span>
-              <span class="result-count warning">Warnings: {{ results.warningCount }}</span>
-              <span class="result-count notice">Notices: {{ results.noticeCount }}</span>
+              <span class="result-count">Pages Scanned: {{ results.pagesScanned }}</span>
+              <span class="result-count error">Errors: {{ results.totalErrors }}</span>
+              <span class="result-count warning">Warnings: {{ results.totalWarnings }}</span>
+              <span class="result-count notice">Notices: {{ results.totalNotices }}</span>
             </p>
             <AposButton label="Download Results" @click="downloadResults" />
 
             <h4>Detailed Results:</h4>
-            <ul class="issue-list">
-              <li v-for="(issue, index) in results.results.issues" :key="index" :class="issue.type">
-                <strong>{{ issue.type.toUpperCase() }}:</strong> {{ issue.message }}
-                <div class="issue-details">
-                  <p>Context:</p>
-                  <small class="context">{{ issue.context }}</small>
-                  <p>Selector:</p>
-                  <small class="selector">{{ issue.selector }}</small>
-                </div>
-              </li>
-            </ul>
+            <div v-for="(page, pageIndex) in results.results" :key="pageIndex" class="result-accordion">
+              <div class="accordion-header" @click="toggleAccordion(pageIndex)">
+                <h5>{{ page.url }}</h5>
+                <span>Errors: {{ page.errorCount }} | Warnings: {{ page.warningCount }} | Notices: {{ page.noticeCount }}</span>
+                <span class="accordion-icon">{{ isAccordionOpen(pageIndex) ? '▼' : '▶' }}</span>
+              </div>
+              <div v-if="isAccordionOpen(pageIndex)" class="accordion-content">
+                <ul class="issue-list">
+                  <li v-for="(issue, issueIndex) in page.issues" :key="issueIndex" :class="issue.type">
+                    <strong>{{ issue.type.toUpperCase() }}:</strong> {{ issue.message }}
+                    <div class="issue-details">
+                      <p>Context:</p>
+                      <small class="context">{{ issue.context }}</small>
+                      <p>Selector:</p>
+                      <small class="selector">{{ issue.selector }}</small>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
 
           <div v-if="history.length">
             <h3>Scan History</h3>
+            <div class="pagination">
+              <button @click="prevHistoryPage" :disabled="currentHistoryPage === 1">Previous</button>
+              <span>Page {{ currentHistoryPage }} of {{ totalHistoryPages }}</span>
+              <button @click="nextHistoryPage" :disabled="currentHistoryPage === totalHistoryPages">Next</button>
+            </div>
             <ul class="scan-history-list">
-              <li v-for="result in history" :key="result._id" class="scan-history-item">
+              <li v-for="result in paginatedHistory" :key="result._id" class="scan-history-item">
                 <div @click="toggleDetails(result._id)" class="scan-history-summary">
                   <div class="scan-info">
                     <span class="scan-date">{{ new Date(result.date).toLocaleString() }}</span>
-                    <span class="scan-url">{{ result.url }}</span>
+                    <span class="scan-url">{{ result.startUrl }}</span>
                   </div>
                   <div class="scan-results">
                     <span class="ruleset-tag">{{ result.ruleset }}</span>
-                    <span class="result-count error">Errors: {{ result.errorCount }}</span>
-                    <span class="result-count warning">Warnings: {{ result.warningCount }}</span>
-                    <span class="result-count notice">Notices: {{ result.noticeCount }}</span>
+                    <span class="result-count error">Errors: {{ result.totalErrors }}</span>
+                    <span class="result-count warning">Warnings: {{ result.totalWarnings }}</span>
+                    <span class="result-count notice">Notices: {{ result.totalNotices }}</span>
                   </div>
                   <span class="toggle-icon">{{ isDetailOpen(result._id) ? '▼' : '▶' }}</span>
                 </div>
                 <div v-if="isDetailOpen(result._id)" class="scan-history-details">
-                  <h4>Detailed Results:</h4>
-                  <ul class="issue-list">
-                    <li v-for="(issue, index) in result.results.issues" :key="index" :class="issue.type">
-                      <strong>{{ issue.type.toUpperCase() }}:</strong> {{ issue.message }}
-                      <div class="issue-details">
-                        <p>Context:</p>
-                        <small class="context">{{ issue.context }}</small>
-                        <p>Selector:</p>
-                        <small class="selector">{{ issue.selector }}</small>
+                  <h4>Scanned Pages:</h4>
+                  <div class="pagination">
+                    <button @click="prevResultPage(result._id)" :disabled="currentResultPages[result._id] === 1">Previous</button>
+                    <span>Page {{ currentResultPages[result._id] || 1 }} of {{ totalResultPages(result) }}</span>
+                    <button @click="nextResultPage(result._id)" :disabled="(currentResultPages[result._id] || 1) === totalResultPages(result)">Next</button>
+                  </div>
+                  <ul class="scanned-pages-list">
+                    <li v-for="(page, pageIndex) in paginatedResultPages(result)" :key="pageIndex">
+                      <div @click="togglePageDetails(result._id, pageIndex)" class="page-summary">
+                        {{ page.url }} - Errors: {{ page.errorCount }}, Warnings: {{ page.warningCount }}, Notices: {{ page.noticeCount }}
+                        <span class="toggle-icon">{{ isPageDetailOpen(result._id, pageIndex) ? '▼' : '▶' }}</span>
+                      </div>
+                      <div v-if="isPageDetailOpen(result._id, pageIndex)" class="page-details">
+                        <ul class="issue-list">
+                          <li v-for="(issue, issueIndex) in page.issues" :key="issueIndex" :class="issue.type">
+                            <strong>{{ issue.type.toUpperCase() }}:</strong> {{ issue.message }}
+                            <div class="issue-details">
+                              <p>Context:</p>
+                              <small class="context">{{ issue.context }}</small>
+                              <p>Selector:</p>
+                              <small class="selector">{{ issue.selector }}</small>
+                            </div>
+                          </li>
+                        </ul>
                       </div>
                     </li>
                   </ul>
                 </div>
               </li>
             </ul>
+            <div class="pagination">
+              <button @click="prevHistoryPage" :disabled="currentHistoryPage === 1">Previous</button>
+              <span>Page {{ currentHistoryPage }} of {{ totalHistoryPages }}</span>
+              <button @click="nextHistoryPage" :disabled="currentHistoryPage === totalHistoryPages">Next</button>
+            </div>
             <AposButton label="Clear History" @click="clearHistory" />
           </div>
         </template>
@@ -103,11 +147,21 @@ export default {
       scanUrl: '',
       ruleset: 'WCAG2AA', // Default ruleset
       results: null,
+      fullScan: false,
+      scanProgress: '',
       history: [],
       loading: false,
       error: null,
       isReady: false,
-      openDetails: new Set()
+      openDetails: new Set(),
+      openAccordions: new Set(),
+      currentPage: 1,
+      itemsPerPage: 5,
+      currentHistoryPage: 1,
+      itemsPerHistoryPage: 5,
+      currentResultPages: {},
+      itemsPerResultPage: 10,
+      openPageDetails: new Set()
     };
   },
   mounted() {
@@ -118,6 +172,16 @@ export default {
       this.setScanUrl();
     });
   },
+  computed: {
+    totalHistoryPages() {
+      return Math.ceil(this.history.length / this.itemsPerHistoryPage);
+    },
+    paginatedHistory() {
+      const start = (this.currentPage - 1) * this.itemsPerPage;
+      const end = start + this.itemsPerPage;
+      return this.history.slice(start, end);
+    }
+  },
   methods: {
     ready() {
       this.$refs.cancelButton.$el.querySelector('button').focus();
@@ -125,13 +189,18 @@ export default {
     async runScan() {
       this.loading = true;
       this.error = null;
+      this.scanProgress = 'Starting scan...';
+      this.results = null;
+
       try {
         const response = await apos.http.post('/api/v1/@bodonkey/pally-extension/scan', {
           body: {
             url: this.scanUrl,
-            ruleset: this.ruleset
+            ruleset: this.ruleset,
+            fullScan: this.fullScan
           }
         });
+
         if (response.resultData) {
           this.results = response.resultData;
           await this.fetchHistory();
@@ -142,6 +211,7 @@ export default {
         this.error = error.message || 'An error occurred during the scan';
       } finally {
         this.loading = false;
+        this.scanProgress = '';
       }
     },
     async fetchHistory() {
@@ -197,6 +267,67 @@ export default {
       } catch (error) {
         this.error = error.message || 'An error occurred while clearing history';
       }
+    },
+    toggleAccordion(index) {
+      if (this.openAccordions.has(index)) {
+        this.openAccordions.delete(index);
+      } else {
+        this.openAccordions.add(index);
+      }
+    },
+    isAccordionOpen(index) {
+      return this.openAccordions.has(index);
+    },
+    prevPage() {
+      if (this.currentPage > 1) {
+        this.currentPage--;
+      }
+    },
+    nextPage() {
+      if (this.currentPage < this.totalPages) {
+        this.currentPage++;
+      }
+    },
+    prevHistoryPage() {
+      if (this.currentHistoryPage > 1) {
+        this.currentHistoryPage--;
+      }
+    },
+    nextHistoryPage() {
+      if (this.currentHistoryPage < this.totalHistoryPages) {
+        this.currentHistoryPage++;
+      }
+    },
+    totalResultPages(result) {
+      return Math.ceil(result.results.length / this.itemsPerResultPage);
+    },
+    paginatedResultPages(result) {
+      const currentPage = this.currentResultPages[result._id] || 1;
+      const start = (currentPage - 1) * this.itemsPerResultPage;
+      const end = start + this.itemsPerResultPage;
+      return result.results.slice(start, end);
+    },
+    prevResultPage(resultId) {
+      if (this.currentResultPages[resultId] > 1) {
+        this.$set(this.currentResultPages, resultId, this.currentResultPages[resultId] - 1);
+      }
+    },
+    nextResultPage(resultId) {
+      const result = this.history.find(h => h._id === resultId);
+      if (this.currentResultPages[resultId] < this.totalResultPages(result)) {
+        this.$set(this.currentResultPages, resultId, (this.currentResultPages[resultId] || 1) + 1);
+      }
+    },
+    togglePageDetails(resultId, pageIndex) {
+      const key = `${resultId}-${pageIndex}`;
+      if (this.openPageDetails.has(key)) {
+        this.openPageDetails.delete(key);
+      } else {
+        this.openPageDetails.add(key);
+      }
+    },
+    isPageDetailOpen(resultId, pageIndex) {
+      return this.openPageDetails.has(`${resultId}-${pageIndex}`);
     },
     setScanUrl() {
       // Set the default scan URL to the current site URL
@@ -372,7 +503,8 @@ select.form-control {
   margin-top: 5px;
 }
 
-.context, .selector {
+.context,
+.selector {
   display: block;
   padding: 5px;
   background-color: #f9f9f9;
@@ -382,5 +514,19 @@ select.form-control {
   word-wrap: break-word;
   font-family: monospace;
   font-size: 0.9em;
+}
+.page-summary {
+  cursor: pointer;
+  padding: 5px;
+  background-color: #f9f9f9;
+  border: 1px solid #ddd;
+  margin-bottom: 5px;
+}
+
+.page-details {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-top: none;
+  margin-bottom: 10px;
 }
 </style>

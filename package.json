@@ -9,6 +9,10 @@
   "author": "BoDonkey(Bob Means)",
   "license": "MIT",
   "dependencies": {
-    "pa11y": "^8.0.0"
+    "axios": "^1.7.7",
+    "cheerio": "^1.0.0",
+    "fast-xml-parser": "^4.5.0",
+    "pa11y": "^8.0.0",
+    "ws": "^8.18.0"
   }
 }

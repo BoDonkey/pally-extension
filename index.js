@@ -1,12 +1,20 @@
 const _ = require('lodash');
 const pa11y = require('pa11y');
 const { v4: uuidv4 } = require('uuid');
+const axios = require('axios');
+const cheerio = require('cheerio');
+const { XMLParser } = require('fast-xml-parser');
+const Websocket = require('ws');
 
 module.exports = {
   extend: '@apostrophecms/doc-type',
   options: {
     label: 'pally-extension',
-    alias: 'pallyExtension'
+    alias: 'pallyExtension',
+    scanDefaults: {
+      maxPages: 500,
+      retentionDays: 90
+    }
   },
   async init(self) {
     self.addManagerModal();
@@ -31,8 +39,7 @@ module.exports = {
       },
       async ensurePa11yCollection() {
         self.resultsCollection = await self.apos.db.createCollection('pa11yResults').catch(() => {
-          // If it already exists, just use it
-          self.resultsCollection = self.apos.db.collection('pa11yResults');
+          return self.apos.db.collection('pa11yResults');
         });
       },
       async ensurePa11yIndexes() {
@@ -42,47 +49,159 @@ module.exports = {
         await self.resultsCollection.createIndex({ date: 1 });
         await self.resultsCollection.createIndex({ task: 1 });
       },
+      async parseSitemap(sitemapUrl, progressCallback) {
+        try {
+          progressCallback(`Fetching sitemap: ${sitemapUrl}`);
+          const response = await axios.get(sitemapUrl, { timeout: 10000 });
+          const parser = new XMLParser();
+          const result = parser.parse(response.data);
+          
+          if (result.urlset && result.urlset.url) {
+            progressCallback(`Found ${result.urlset.url.length} URLs in sitemap`);
+            return result.urlset.url.map(entry => entry.loc);
+          } else if (result.sitemapindex && result.sitemapindex.sitemap) {
+            progressCallback('Found sitemap index, parsing sub-sitemaps...');
+            const subSitemapUrls = result.sitemapindex.sitemap.map(entry => entry.loc);
+            let allUrls = [];
+            for (const subSitemapUrl of subSitemapUrls) {
+              const subUrls = await self.parseSitemap(subSitemapUrl, progressCallback);
+              allUrls = allUrls.concat(subUrls);
+            }
+            return allUrls;
+          }
+          progressCallback('No valid sitemap structure found');
+          return [];
+        } catch (error) {
+          progressCallback(`Error parsing sitemap ${sitemapUrl}: ${error.message}`);
+          return [];
+        }
+      },
+      async crawlWebsite(startUrl, maxPages = self.options.scanDefaults.maxPages, progressCallback) {
+        progressCallback(`Starting crawl of ${startUrl}`);
+        const sitemapUrl = new URL('/sitemap.xml', startUrl).toString();
+        let pages = [];
+        try {
+          pages = await self.parseSitemap(sitemapUrl, progressCallback);
+          progressCallback(`Found ${pages.length} pages in sitemap`);
+        } catch (error) {
+          progressCallback(`Error parsing sitemap: ${error.message}`);
+        }
+        
+        if (pages.length === 0) {
+          progressCallback('No sitemap found or empty sitemap. Falling back to link crawling.');
+          const visited = new Set();
+          const toVisit = [startUrl];
+          
+          while (toVisit.length > 0 && pages.length < maxPages) {
+            const url = toVisit.pop();
+            if (visited.has(url)) continue;
+        
+            visited.add(url);
+            pages.push(url);
+            progressCallback(`Crawled ${pages.length} pages...`);
+        
+            try {
+              const response = await axios.get(url, { timeout: 10000 });
+              const $ = cheerio.load(response.data);
+        
+              $('a').each((i, link) => {
+                const href = $(link).attr('href');
+                if (href && href.startsWith('/') && !visited.has(href)) {
+                  toVisit.push(new URL(href, startUrl).toString());
+                }
+              });
+            } catch (error) {
+              progressCallback(`Error crawling ${url}: ${error.message}`);
+            }
+          }
+        }
+        
+        progressCallback(`Crawling complete. Found ${pages.length} pages`);
+        return pages.slice(0, maxPages);
+      },
+      async scanSinglePage(url, ruleset) {
+        try {
+          const pageResult = await pa11y(url, {
+            standard: ruleset,
+            timeout: 30000  // 30 seconds timeout
+          });
+          return {
+            url: url,
+            errorCount: pageResult.issues.filter(issue => issue.type === 'error').length,
+            warningCount: pageResult.issues.filter(issue => issue.type === 'warning').length,
+            noticeCount: pageResult.issues.filter(issue => issue.type === 'notice').length,
+            issues: pageResult.issues
+          };
+        } catch (error) {
+          console.error(`Error scanning ${url}: ${error.message}`);
+          return null;
+        }
+      },
+      async scanWebsite(startUrl, ruleset, fullScan, maxPages = self.options.scanDefaults.maxPages, progressCallback) {
+        progressCallback(`Starting ${fullScan ? 'full' : 'single page'} scan of ${startUrl}`);
+        const pages = fullScan ? await self.crawlWebsite(startUrl, maxPages, progressCallback) : [startUrl];
+        const results = [];
+        let scannedCount = 0;
+
+        for (const page of pages) {
+          progressCallback(`Scanning page ${scannedCount + 1} of ${pages.length}: ${page}`);
+          const pageResult = await self.scanSinglePage(page, ruleset);
+          if (pageResult) {
+            results.push(pageResult);
+          }
+          scannedCount++;
+        }
+
+        progressCallback(`Scan complete. Scanned ${results.length} pages successfully`);
+        return results;
+      }
     };
   },
   apiRoutes(self) {
     return {
       post: {
-        // Route to run a new Pa11y scan
         async scan(req) {
-          const { url, ruleset = 'WCAG2AA' } = req.body;
-          console.log('Scanning:', url, 'with ruleset:', ruleset);
+          const { url, ruleset = 'WCAG2AA', fullScan = false, maxPages = self.options.scanDefaults.maxPages } = req.body;
+          console.log(`Starting scan: URL=${url}, Ruleset=${ruleset}, FullScan=${fullScan}, MaxPages=${maxPages}`);
+          
           try {
-            const results = await pa11y(url, { standard: ruleset });
+            const results = await self.scanWebsite(url, ruleset, fullScan, maxPages, (message) => {
+              // This is where we would ideally send progress updates to the client
+              // For now, we'll just log it to the console
+              console.log(message);
+            });
+
             const resultData = {
               _id: uuidv4(),
-              url,
+              startUrl: url,
               ruleset,
               date: new Date(),
-              errorCount: results.issues.filter(issue => issue.type === 'error').length,
-              warningCount: results.issues.filter(issue => issue.type === 'warning').length,
-              noticeCount: results.issues.filter(issue => issue.type === 'notice').length,
+              fullScan,
+              pagesScanned: results.length,
+              totalErrors: results.reduce((sum, page) => sum + page.errorCount, 0),
+              totalWarnings: results.reduce((sum, page) => sum + page.warningCount, 0),
+              totalNotices: results.reduce((sum, page) => sum + page.noticeCount, 0),
               results: results
             };
 
-            // Insert the scan results into the MongoDB collection
             try {
               await self.resultsCollection.insertOne(resultData);
             } catch (error) {
               console.error('Insert failed:', error);
             }
+
             return {
               resultData
             };
           } catch (err) {
-            throw new Error(`Failed to run Pa11y scan: ${err.message}`);
+            console.error(`Scan failed: ${err.message}`);
+            throw new Error(`Failed to run scan: ${err.message}`);
           }
         }
       },
       get: {
-        // Route to fetch historical Pa11y results
         async history(req) {
           const results = await self.apos.db.collection('pa11yResults').find().sort({ date: -1 }).toArray();
-          console.log('History Results:', results);
           return {
             success: true,
             data: results
@@ -92,9 +211,7 @@ module.exports = {
       delete: {
         async clearHistory(req) {
           try {
-            // Remove all documents from the collection
             const result = await self.apos.db.collection('pa11yResults').deleteMany({});
-            // Return the count of deleted documents
             return {
               success: true,
               message: `${result.deletedCount} records deleted`

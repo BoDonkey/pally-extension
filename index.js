@@ -123,7 +123,9 @@ module.exports = {
         try {
           const pageResult = await pa11y(url, {
             standard: ruleset,
-            timeout: 30000  // 30 seconds timeout
+            timeout: 30000,
+            includeWarnings: true,
+            includeNotices: true
           });
           return {
             url: url,
@@ -142,26 +144,34 @@ module.exports = {
         const pages = fullScan ? await self.crawlWebsite(startUrl, maxPages, progressCallback) : [startUrl];
         const results = [];
         let scannedCount = 0;
+
+        // Retrieve the mutable progress object
+        const progress = scanProgress.get(scanId);
+        progress.totalPages = pages.length;
+
         for (const page of pages) {
           // Check if the scan has been cancelled
-          const progress = scanProgress.get(scanId);
-          if (progress && progress.cancelled) {
+          if (progress.cancelled) {
             progressCallback(`Scan ${scanId} has been cancelled.`);
             break; // Exit the loop to stop scanning
           }
+
           progressCallback(`Scanning page ${scannedCount + 1} of ${pages.length}: ${page}`);
-          const pageResult = await self.scanSinglePage(page, ruleset);
-          if (pageResult) {
-            results.push(pageResult);
+
+          try {
+            const pageResult = await self.scanSinglePage(page, ruleset);
+            if (pageResult) {
+              results.push(pageResult);
+            }
+          } catch (error) {
+            console.error(`Error scanning page ${page}: ${error.message}`);
           }
+
           scannedCount++;
-          scanProgress.set(scanId, {
-            ...progress,
-            scannedCount,
-            totalPages: pages.length,
-            currentPage: page
-          });
+          progress.scannedCount = scannedCount;
+          progress.currentPage = page;
         }
+
         progressCallback(`Scan complete. Scanned ${results.length} pages successfully`);
         scanProgress.delete(scanId);
         return results;
@@ -175,10 +185,16 @@ module.exports = {
           const { url, ruleset = 'WCAG2AA', fullScan = false } = req.body;
           const maxPages = self.options.maxPages || self.options.scanDefaults.maxPages;
           console.log(`Starting scan: URL=${url}, Ruleset=${ruleset}, FullScan=${fullScan}, MaxPages=${maxPages}`);
-          
-          const scanId = uuidv4();
-          scanProgress.set(scanId, { scannedCount: 0, totalPages: 0, currentPage: '' });
 
+          const scanId = uuidv4();
+          // Initialize a mutable progress object
+          const progress = {
+            scannedCount: 0,
+            totalPages: 0,
+            currentPage: '',
+            cancelled: false
+          };
+          scanProgress.set(scanId, progress);
           // Start the scan process asynchronously
           self.scanWebsite(scanId, url, ruleset, fullScan, maxPages, (message) => {
             console.log(message);
@@ -219,10 +235,11 @@ module.exports = {
               message: 'Scan ID is required'
             };
           }
+        
           const progress = scanProgress.get(scanId);
           if (progress) {
             // Set the cancelled flag to true
-            scanProgress.set(scanId, { ...progress, cancelled: true });
+            progress.cancelled = true;
             return {
               success: true,
               message: `Scan ${scanId} has been cancelled`

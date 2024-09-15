@@ -4,7 +4,8 @@ const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const { XMLParser } = require('fast-xml-parser');
-const Websocket = require('ws');
+
+const scanProgress = new Map();
 
 module.exports = {
   extend: '@apostrophecms/doc-type',
@@ -12,8 +13,7 @@ module.exports = {
     label: 'pally-extension',
     alias: 'pallyExtension',
     scanDefaults: {
-      maxPages: 500,
-      retentionDays: 90
+      maxPages: 500
     }
   },
   async init(self) {
@@ -55,7 +55,7 @@ module.exports = {
           const response = await axios.get(sitemapUrl, { timeout: 10000 });
           const parser = new XMLParser();
           const result = parser.parse(response.data);
-          
+
           if (result.urlset && result.urlset.url) {
             progressCallback(`Found ${result.urlset.url.length} URLs in sitemap`);
             return result.urlset.url.map(entry => entry.loc);
@@ -86,24 +86,24 @@ module.exports = {
         } catch (error) {
           progressCallback(`Error parsing sitemap: ${error.message}`);
         }
-        
+
         if (pages.length === 0) {
           progressCallback('No sitemap found or empty sitemap. Falling back to link crawling.');
           const visited = new Set();
           const toVisit = [startUrl];
-          
+
           while (toVisit.length > 0 && pages.length < maxPages) {
             const url = toVisit.pop();
             if (visited.has(url)) continue;
-        
+
             visited.add(url);
             pages.push(url);
             progressCallback(`Crawled ${pages.length} pages...`);
-        
+
             try {
               const response = await axios.get(url, { timeout: 10000 });
               const $ = cheerio.load(response.data);
-        
+
               $('a').each((i, link) => {
                 const href = $(link).attr('href');
                 if (href && href.startsWith('/') && !visited.has(href)) {
@@ -115,7 +115,7 @@ module.exports = {
             }
           }
         }
-        
+
         progressCallback(`Crawling complete. Found ${pages.length} pages`);
         return pages.slice(0, maxPages);
       },
@@ -137,42 +137,54 @@ module.exports = {
           return null;
         }
       },
-      async scanWebsite(startUrl, ruleset, fullScan, maxPages = self.options.scanDefaults.maxPages, progressCallback) {
+      async scanWebsite(scanId, startUrl, ruleset, fullScan, maxPages = self.options.scanDefaults.maxPages, progressCallback) {
         progressCallback(`Starting ${fullScan ? 'full' : 'single page'} scan of ${startUrl}`);
         const pages = fullScan ? await self.crawlWebsite(startUrl, maxPages, progressCallback) : [startUrl];
         const results = [];
         let scannedCount = 0;
-
         for (const page of pages) {
+          // Check if the scan has been cancelled
+          const progress = scanProgress.get(scanId);
+          if (progress && progress.cancelled) {
+            progressCallback(`Scan ${scanId} has been cancelled.`);
+            break; // Exit the loop to stop scanning
+          }
           progressCallback(`Scanning page ${scannedCount + 1} of ${pages.length}: ${page}`);
           const pageResult = await self.scanSinglePage(page, ruleset);
           if (pageResult) {
             results.push(pageResult);
           }
           scannedCount++;
+          scanProgress.set(scanId, {
+            ...progress,
+            scannedCount,
+            totalPages: pages.length,
+            currentPage: page
+          });
         }
-
         progressCallback(`Scan complete. Scanned ${results.length} pages successfully`);
+        scanProgress.delete(scanId);
         return results;
       }
-    };
+    }
   },
   apiRoutes(self) {
     return {
       post: {
         async scan(req) {
-          const { url, ruleset = 'WCAG2AA', fullScan = false, maxPages = self.options.scanDefaults.maxPages } = req.body;
+          const { url, ruleset = 'WCAG2AA', fullScan = false } = req.body;
+          const maxPages = self.options.maxPages || self.options.scanDefaults.maxPages;
           console.log(`Starting scan: URL=${url}, Ruleset=${ruleset}, FullScan=${fullScan}, MaxPages=${maxPages}`);
           
-          try {
-            const results = await self.scanWebsite(url, ruleset, fullScan, maxPages, (message) => {
-              // This is where we would ideally send progress updates to the client
-              // For now, we'll just log it to the console
-              console.log(message);
-            });
+          const scanId = uuidv4();
+          scanProgress.set(scanId, { scannedCount: 0, totalPages: 0, currentPage: '' });
 
+          // Start the scan process asynchronously
+          self.scanWebsite(scanId, url, ruleset, fullScan, maxPages, (message) => {
+            console.log(message);
+          }).then(async (results) => {
             const resultData = {
-              _id: uuidv4(),
+              _id: scanId,
               startUrl: url,
               ruleset,
               date: new Date(),
@@ -189,13 +201,37 @@ module.exports = {
             } catch (error) {
               console.error('Insert failed:', error);
             }
-
-            return {
-              resultData
-            };
-          } catch (err) {
+          }).catch((err) => {
             console.error(`Scan failed: ${err.message}`);
-            throw new Error(`Failed to run scan: ${err.message}`);
+            scanProgress.delete(scanId);
+          });
+
+          return {
+            success: true,
+            scanId: scanId
+          };
+        },
+        async cancelScan(req) {
+          const { scanId } = req.body;
+          if (!scanId) {
+            return {
+              success: false,
+              message: 'Scan ID is required'
+            };
+          }
+          const progress = scanProgress.get(scanId);
+          if (progress) {
+            // Set the cancelled flag to true
+            scanProgress.set(scanId, { ...progress, cancelled: true });
+            return {
+              success: true,
+              message: `Scan ${scanId} has been cancelled`
+            };
+          } else {
+            return {
+              success: false,
+              message: 'Scan not found or already completed'
+            };
           }
         }
       },
@@ -206,6 +242,36 @@ module.exports = {
             success: true,
             data: results
           };
+        },
+        async getScanProgress(req) {
+          const { scanId } = req.query;
+          const progress = scanProgress.get(scanId);
+          if (progress) {
+            return {
+              success: true,
+              data: {
+                status: progress.cancelled ? 'cancelled' : 'in-progress',
+                ...progress
+              }
+            };
+          } else {
+            // Check if scan is completed
+            const result = await self.resultsCollection.findOne({ _id: scanId });
+            if (result) {
+              return {
+                success: true,
+                data: {
+                  status: 'completed',
+                  results: result
+                }
+              };
+            } else {
+              return {
+                success: false,
+                message: 'Scan not found'
+              };
+            }
+          }
         }
       },
       delete: {
@@ -218,6 +284,22 @@ module.exports = {
             };
           } catch (err) {
             console.error('Error clearing history:', err);
+            return {
+              success: false,
+              error: err.message
+            };
+          }
+        },
+        async deleteHistoryItem(req) {
+          const { id } = req.body;
+          try {
+            const result = await self.apos.db.collection('pa11yResults').deleteOne({ _id: id });
+            return {
+              success: true,
+              message: `${result.deletedCount} record deleted`
+            };
+          } catch (err) {
+            console.error('Error deleting history item:', err);
             return {
               success: false,
               error: err.message

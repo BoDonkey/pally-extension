@@ -30,6 +30,7 @@
             </div>
             <AposButton label="Run Scan" @click="runScan" :disabled="scanning" />
           </div>
+
           <div v-if="scanning">
             Running scan...
             <div>{{ scanProgress }}</div>
@@ -42,7 +43,9 @@
           <div v-if="scanProgress === 'Scan has been cancelled'">
             <p>The scan was cancelled.</p>
           </div>
+
           <div v-if="error">{{ error }}</div>
+
           <div v-if="results">
             <h3>Scan Results for {{ results.startUrl }}</h3>
             <p>
@@ -222,7 +225,6 @@ export default {
             fullScan: this.fullScan
           }
         });
-
         if (response.success && response.scanId) {
           this.currentScanId = response.scanId;
           this.pollInterval = setInterval(this.pollScanProgress, 2000);

@@ -76,10 +76,11 @@ module.exports = {
           return [];
         }
       },
-      async crawlWebsite(startUrl, maxPages = self.options.scanDefaults.maxPages, progressCallback) {
+      async crawlWebsite(startUrl, maxPages, progressCallback) {
         progressCallback(`Starting crawl of ${startUrl}`);
         const sitemapUrl = new URL('/sitemap.xml', startUrl).toString();
         let pages = [];
+
         try {
           pages = await self.parseSitemap(sitemapUrl, progressCallback);
           progressCallback(`Found ${pages.length} pages in sitemap`);
@@ -120,12 +121,15 @@ module.exports = {
         return pages.slice(0, maxPages);
       },
       async scanSinglePage(url, ruleset) {
+        const includeWarnings = (typeof self.options.includeWarnings !== 'undefined') ? self.options.includeWarnings : true;
+        const includeNotices = (typeof self.options.includeNotices !== 'undefined') ? self.options.includeNotices : true;
+
         try {
           const pageResult = await pa11y(url, {
             standard: ruleset,
             timeout: 30000,
-            includeWarnings: true,
-            includeNotices: true
+            includeWarnings,
+            includeNotices
           });
           return {
             url: url,
@@ -139,7 +143,7 @@ module.exports = {
           return null;
         }
       },
-      async scanWebsite(scanId, startUrl, ruleset, fullScan, maxPages = self.options.scanDefaults.maxPages, progressCallback) {
+      async scanWebsite(scanId, startUrl, ruleset, fullScan, maxPages, progressCallback) {
         progressCallback(`Starting ${fullScan ? 'full' : 'single page'} scan of ${startUrl}`);
         const pages = fullScan ? await self.crawlWebsite(startUrl, maxPages, progressCallback) : [startUrl];
         const results = [];
@@ -235,7 +239,6 @@ module.exports = {
               message: 'Scan ID is required'
             };
           }
-        
           const progress = scanProgress.get(scanId);
           if (progress) {
             // Set the cancelled flag to true

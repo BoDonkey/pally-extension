@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const { XMLParser } = require('fast-xml-parser');
+const puppeteer = require('puppeteer');
 
 const scanProgress = new Map();
 
@@ -120,16 +121,19 @@ module.exports = {
         progressCallback(`Crawling complete. Found ${pages.length} pages`);
         return pages.slice(0, maxPages);
       },
-      async scanSinglePage(url, ruleset) {
+      async scanSinglePage(url, ruleset, browser) {
+        const self = this;
+    
         const includeWarnings = (typeof self.options.includeWarnings !== 'undefined') ? self.options.includeWarnings : true;
         const includeNotices = (typeof self.options.includeNotices !== 'undefined') ? self.options.includeNotices : true;
-
+    
         try {
           const pageResult = await pa11y(url, {
             standard: ruleset,
             timeout: 30000,
             includeWarnings,
-            includeNotices
+            includeNotices,
+            browser: browser // Pass the browser instance to Pa11y
           });
           return {
             url: url,
@@ -143,45 +147,61 @@ module.exports = {
           return null;
         }
       },
+    
       async scanWebsite(scanId, startUrl, ruleset, fullScan, maxPages, progressCallback) {
+        const self = this;
+    
         progressCallback(`Starting ${fullScan ? 'full' : 'single page'} scan of ${startUrl}`);
         const pages = fullScan ? await self.crawlWebsite(startUrl, maxPages, progressCallback) : [startUrl];
         const results = [];
         let scannedCount = 0;
-
+    
         // Retrieve the mutable progress object
-        const progress = scanProgress.get(scanId);
+        const progress = self.scanProgress.get(scanId);
         progress.totalPages = pages.length;
-
-        for (const page of pages) {
-          // Check if the scan has been cancelled
-          if (progress.cancelled) {
-            progressCallback(`Scan ${scanId} has been cancelled.`);
-            break; // Exit the loop to stop scanning
-          }
-
-          progressCallback(`Scanning page ${scannedCount + 1} of ${pages.length}: ${page}`);
-
-          try {
-            const pageResult = await self.scanSinglePage(page, ruleset);
-            if (pageResult) {
-              results.push(pageResult);
+    
+        // Get Puppeteer options from self.options.puppeteer or use default empty object
+        const puppeteerOptions = self.options.puppeteer || {};
+    
+        // Initialize Puppeteer
+        let browser;
+        try {
+          browser = await puppeteer.launch(puppeteerOptions);
+    
+          for (const page of pages) {
+            // Check if the scan has been cancelled
+            if (progress.cancelled) {
+              progressCallback(`Scan ${scanId} has been cancelled.`);
+              break; // Exit the loop to stop scanning
             }
-          } catch (error) {
-            console.error(`Error scanning page ${page}: ${error.message}`);
+    
+            progressCallback(`Scanning page ${scannedCount + 1} of ${pages.length}: ${page}`);
+    
+            try {
+              const pageResult = await self.scanSinglePage(page, ruleset, browser);
+              if (pageResult) {
+                results.push(pageResult);
+              }
+            } catch (error) {
+              console.error(`Error scanning page ${page}: ${error.message}`);
+            }
+    
+            scannedCount++;
+            progress.scannedCount = scannedCount;
+            progress.currentPage = page;
           }
-
-          scannedCount++;
-          progress.scannedCount = scannedCount;
-          progress.currentPage = page;
+    
+          progressCallback(`Scan complete. Scanned ${results.length} pages successfully`);
+        } catch (error) {
+          console.error(`Error during scan: ${error.message}`);
+        } finally {
+          if (browser) {
+            await browser.close();
+          }
+          self.scanProgress.delete(scanId);
         }
-
-        progressCallback(`Scan complete. Scanned ${results.length} pages successfully`);
-        scanProgress.delete(scanId);
         return results;
-      }
-    }
-  },
+      },
   apiRoutes(self) {
     return {
       post: {

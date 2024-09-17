@@ -147,7 +147,6 @@ module.exports = {
         }
       },
       async scanWebsite(scanId, startUrl, ruleset, fullScan, maxPages, progressCallback) {
-        const self = this;
 
         progressCallback(`Starting ${fullScan ? 'full' : 'single page'} scan of ${startUrl}`);
         const pages = fullScan ? await self.crawlWebsite(startUrl, maxPages, progressCallback) : [startUrl];
@@ -155,7 +154,8 @@ module.exports = {
         let scannedCount = 0;
 
         // Retrieve the mutable progress object
-        const progress = self.scanProgress.get(scanId);
+        const progress = scanProgress.get(scanId);
+        console.log('Progress:', progress);
         progress.totalPages = pages.length;
 
         // Get Puppeteer options from self.options.puppeteer or use default empty object
@@ -165,6 +165,7 @@ module.exports = {
         let browser;
         try {
           browser = await puppeteer.launch(puppeteerOptions);
+          console.log('Puppeteer launched', browser);
 
           for (const page of pages) {
             // Check if the scan has been cancelled
@@ -196,7 +197,7 @@ module.exports = {
           if (browser) {
             await browser.close();
           }
-          self.scanProgress.delete(scanId);
+          scanProgress.delete(scanId);
         }
         return results;
       }

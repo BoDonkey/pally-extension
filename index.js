@@ -199,151 +199,151 @@ module.exports = {
           self.scanProgress.delete(scanId);
         }
         return results;
+      }
+    }
+  },
+  apiRoutes(self) {
+    return {
+      post: {
+        async scan(req) {
+          const { url, ruleset = 'WCAG2AA', fullScan = false } = req.body;
+          const maxPages = self.options.maxPages || self.options.scanDefaults.maxPages;
+          console.log(`Starting scan: URL=${url}, Ruleset=${ruleset}, FullScan=${fullScan}, MaxPages=${maxPages}`);
+
+          const scanId = uuidv4();
+          // Initialize a mutable progress object
+          const progress = {
+            scannedCount: 0,
+            totalPages: 0,
+            currentPage: '',
+            cancelled: false
+          };
+          scanProgress.set(scanId, progress);
+          // Start the scan process asynchronously
+          self.scanWebsite(scanId, url, ruleset, fullScan, maxPages, (message) => {
+            console.log(message);
+          }).then(async (results) => {
+            const resultData = {
+              _id: scanId,
+              startUrl: url,
+              ruleset,
+              date: new Date(),
+              fullScan,
+              pagesScanned: results.length,
+              totalErrors: results.reduce((sum, page) => sum + page.errorCount, 0),
+              totalWarnings: results.reduce((sum, page) => sum + page.warningCount, 0),
+              totalNotices: results.reduce((sum, page) => sum + page.noticeCount, 0),
+              results: results
+            };
+
+            try {
+              await self.resultsCollection.insertOne(resultData);
+            } catch (error) {
+              console.error('Insert failed:', error);
+            }
+          }).catch((err) => {
+            console.error(`Scan failed: ${err.message}`);
+            scanProgress.delete(scanId);
+          });
+
+          return {
+            success: true,
+            scanId: scanId
+          };
+        },
+        async cancelScan(req) {
+          const { scanId } = req.body;
+          if (!scanId) {
+            return {
+              success: false,
+              message: 'Scan ID is required'
+            };
+          }
+          const progress = scanProgress.get(scanId);
+          if (progress) {
+            // Set the cancelled flag to true
+            progress.cancelled = true;
+            return {
+              success: true,
+              message: `Scan ${scanId} has been cancelled`
+            };
+          } else {
+            return {
+              success: false,
+              message: 'Scan not found or already completed'
+            };
+          }
+        }
       },
-      apiRoutes(self) {
-        return {
-          post: {
-            async scan(req) {
-              const { url, ruleset = 'WCAG2AA', fullScan = false } = req.body;
-              const maxPages = self.options.maxPages || self.options.scanDefaults.maxPages;
-              console.log(`Starting scan: URL=${url}, Ruleset=${ruleset}, FullScan=${fullScan}, MaxPages=${maxPages}`);
-
-              const scanId = uuidv4();
-              // Initialize a mutable progress object
-              const progress = {
-                scannedCount: 0,
-                totalPages: 0,
-                currentPage: '',
-                cancelled: false
-              };
-              scanProgress.set(scanId, progress);
-              // Start the scan process asynchronously
-              self.scanWebsite(scanId, url, ruleset, fullScan, maxPages, (message) => {
-                console.log(message);
-              }).then(async (results) => {
-                const resultData = {
-                  _id: scanId,
-                  startUrl: url,
-                  ruleset,
-                  date: new Date(),
-                  fullScan,
-                  pagesScanned: results.length,
-                  totalErrors: results.reduce((sum, page) => sum + page.errorCount, 0),
-                  totalWarnings: results.reduce((sum, page) => sum + page.warningCount, 0),
-                  totalNotices: results.reduce((sum, page) => sum + page.noticeCount, 0),
-                  results: results
-                };
-
-                try {
-                  await self.resultsCollection.insertOne(resultData);
-                } catch (error) {
-                  console.error('Insert failed:', error);
-                }
-              }).catch((err) => {
-                console.error(`Scan failed: ${err.message}`);
-                scanProgress.delete(scanId);
-              });
-
+      get: {
+        async history(req) {
+          const results = await self.apos.db.collection('pa11yResults').find().sort({ date: -1 }).toArray();
+          return {
+            success: true,
+            data: results
+          };
+        },
+        async getScanProgress(req) {
+          const { scanId } = req.query;
+          const progress = scanProgress.get(scanId);
+          if (progress) {
+            return {
+              success: true,
+              data: {
+                status: progress.cancelled ? 'cancelled' : 'in-progress',
+                ...progress
+              }
+            };
+          } else {
+            // Check if scan is completed
+            const result = await self.resultsCollection.findOne({ _id: scanId });
+            if (result) {
               return {
                 success: true,
-                scanId: scanId
-              };
-            },
-            async cancelScan(req) {
-              const { scanId } = req.body;
-              if (!scanId) {
-                return {
-                  success: false,
-                  message: 'Scan ID is required'
-                };
-              }
-              const progress = scanProgress.get(scanId);
-              if (progress) {
-                // Set the cancelled flag to true
-                progress.cancelled = true;
-                return {
-                  success: true,
-                  message: `Scan ${scanId} has been cancelled`
-                };
-              } else {
-                return {
-                  success: false,
-                  message: 'Scan not found or already completed'
-                };
-              }
-            }
-          },
-          get: {
-            async history(req) {
-              const results = await self.apos.db.collection('pa11yResults').find().sort({ date: -1 }).toArray();
-              return {
-                success: true,
-                data: results
-              };
-            },
-            async getScanProgress(req) {
-              const { scanId } = req.query;
-              const progress = scanProgress.get(scanId);
-              if (progress) {
-                return {
-                  success: true,
-                  data: {
-                    status: progress.cancelled ? 'cancelled' : 'in-progress',
-                    ...progress
-                  }
-                };
-              } else {
-                // Check if scan is completed
-                const result = await self.resultsCollection.findOne({ _id: scanId });
-                if (result) {
-                  return {
-                    success: true,
-                    data: {
-                      status: 'completed',
-                      results: result
-                    }
-                  };
-                } else {
-                  return {
-                    success: false,
-                    message: 'Scan not found'
-                  };
+                data: {
+                  status: 'completed',
+                  results: result
                 }
-              }
+              };
+            } else {
+              return {
+                success: false,
+                message: 'Scan not found'
+              };
             }
-          },
-          delete: {
-            async clearHistory(req) {
-              try {
-                const result = await self.apos.db.collection('pa11yResults').deleteMany({});
-                return {
-                  success: true,
-                  message: `${result.deletedCount} records deleted`
-                };
-              } catch (err) {
-                console.error('Error clearing history:', err);
-                return {
-                  success: false,
-                  error: err.message
-                };
-              }
-            },
-            async deleteHistoryItem(req) {
-              const { id } = req.body;
-              try {
-                const result = await self.apos.db.collection('pa11yResults').deleteOne({ _id: id });
-                return {
-                  success: true,
-                  message: `${result.deletedCount} record deleted`
-                };
-              } catch (err) {
-                console.error('Error deleting history item:', err);
-                return {
-                  success: false,
-                  error: err.message
-                };
-              }
-            }
+          }
+        }
+      },
+      delete: {
+        async clearHistory(req) {
+          try {
+            const result = await self.apos.db.collection('pa11yResults').deleteMany({});
+            return {
+              success: true,
+              message: `${result.deletedCount} records deleted`
+            };
+          } catch (err) {
+            console.error('Error clearing history:', err);
+            return {
+              success: false,
+              error: err.message
+            };
+          }
+        },
+        async deleteHistoryItem(req) {
+          const { id } = req.body;
+          try {
+            const result = await self.apos.db.collection('pa11yResults').deleteOne({ _id: id });
+            return {
+              success: true,
+              message: `${result.deletedCount} record deleted`
+            };
+          } catch (err) {
+            console.error('Error deleting history item:', err);
+            return {
+              success: false,
+              error: err.message
+            };
           }
         }
       }

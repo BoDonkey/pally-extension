@@ -36,10 +36,6 @@ Pally Extension is a modern ApostropheCMS module that integrates Pa11y to perfor
    }
    ```
 
-### Database
-
-When this module is installed, it creates a new collection in your MongoDB called `pa11y-results`. If you uninstall this extension, you will need to delete this collection manually.
-
 ### Additional Setup for Ubuntu, CentOS, & WSL
 
 If you are using WSL, Ubuntu, or CentOS, you will need to install some additional dependencies to ensure Puppeteer (used by Pa11y) runs correctly.
@@ -73,6 +69,8 @@ For a standard Ubuntu setup, follow these steps:
    ```
 
 2. **Install Required Dependencies**:
+   > Some newer versions of Puppeteer might not need this. Additionally, if you are already using the chromium-browser your system should already have the needed dependencies.
+
    Install the necessary packages for Chromium and Puppeteer:
    ```bash
    sudo apt install libnss3 libxss1 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libgbm1 libxkbcommon0 libxcomposite1 libasound2 libwayland-client0 libwayland-egl1 libwayland-server0 libappindicator3-1 libdbusmenu-glib4 libdbusmenu-gtk3-4
@@ -86,10 +84,25 @@ For a standard Ubuntu setup, follow these steps:
 
 4. **Configure Puppeteer**:
    Point Puppeteer to the installed Chromium:
+
+   Find where the browser is installed:
+   ```bash
+   $ which chromium-browser
+   ```
+
    ```javascript
-   const browser = await puppeteer.launch({
-     executablePath: '/usr/bin/chromium-browser'
-   });
+   // app.js
+   modules: {
+     '@bodonkey/pally-extension': {
+        options: {
+           puppeteer: {
+            // Specify the custom Chromium executable path
+           // returned from command above
+           executablePath: '/usr/bin/chromium-browser'
+           }
+        }
+     }
+   }
    ```
 
 #### CentOS
@@ -97,7 +110,7 @@ For a standard Ubuntu setup, follow these steps:
 For CentOS, follow these steps:
 
 1. **Update Packages**:
-   Ensure your package manager is up to date:
+   Ensure your package manager is up-to-date:
    ```bash
    sudo yum update -y
    ```
@@ -117,12 +130,32 @@ For CentOS, follow these steps:
 
 4. **Configure Puppeteer**:
    Similar to Ubuntu, specify the executable path to Chromium for Puppeteer:
-   ```javascript
-   const browser = await puppeteer.launch({
-     executablePath: '/usr/bin/chromium-browser',
-     args: ['--no-sandbox', '--disable-setuid-sandbox'] // To resolve sandboxing issues on some servers
-   });
+
+   Find where the browser is installed:
+   ```bash
+   rpm -ql chromium
    ```
+
+   ```javascript
+   // app.js
+   modules: {
+     '@bodonkey/pally-extension': {
+        options: {
+           puppeteer: {
+            // Specify the custom Chromium executable path
+           // returned from command above
+           executablePath: '/usr/bin/chromium-browser',
+            // To resolve sandboxing issues on some servers
+           args: ['--no-sandbox', '--disable-setuid-sandbox']
+           }
+        }
+     }
+   }
+   ```
+
+### Database
+
+When this module is installed, it creates a new collection in your MongoDB called `pa11y-results`. If you uninstall this extension, you will need to delete this collection manually.
 
 ## Configuration
 
@@ -132,7 +165,7 @@ Pally Extension offers several configurable options to tailor its behavior to yo
 
 | Option            | Type    | Default | Description                                                                 |
 | ----------------- | ------- | ------- | --------------------------------------------------------------------------- |
-| `maxPages`        | Number  | 10      | The maximum number of pages to scan.                                        |
+| `maxPages`        | Number  | 500      | The maximum number of pages to scan.                                        |
 | `includeWarnings` | Boolean | false   | Whether to include warnings in scan results.                                |
 | `includeNotices`  | Boolean | false   | Whether to include notices in scan results.                                 |
 | `puppeteer`       | Object  | {}      | Puppeteer launch configuration. You can specify any valid Puppeteer options.|

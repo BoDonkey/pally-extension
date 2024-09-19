@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const { XMLParser } = require('fast-xml-parser');
+const puppeteer = require('puppeteer');
 
 const scanProgress = new Map();
 
@@ -120,7 +121,8 @@ module.exports = {
         progressCallback(`Crawling complete. Found ${pages.length} pages`);
         return pages.slice(0, maxPages);
       },
-      async scanSinglePage(url, ruleset) {
+      async scanSinglePage(url, ruleset, browser) {
+
         const includeWarnings = (typeof self.options.includeWarnings !== 'undefined') ? self.options.includeWarnings : true;
         const includeNotices = (typeof self.options.includeNotices !== 'undefined') ? self.options.includeNotices : true;
 
@@ -129,7 +131,8 @@ module.exports = {
             standard: ruleset,
             timeout: 30000,
             includeWarnings,
-            includeNotices
+            includeNotices,
+            browser
           });
           return {
             url: url,
@@ -144,6 +147,7 @@ module.exports = {
         }
       },
       async scanWebsite(scanId, startUrl, ruleset, fullScan, maxPages, progressCallback) {
+
         progressCallback(`Starting ${fullScan ? 'full' : 'single page'} scan of ${startUrl}`);
         const pages = fullScan ? await self.crawlWebsite(startUrl, maxPages, progressCallback) : [startUrl];
         const results = [];
@@ -151,33 +155,50 @@ module.exports = {
 
         // Retrieve the mutable progress object
         const progress = scanProgress.get(scanId);
+        console.log('Progress:', progress);
         progress.totalPages = pages.length;
 
-        for (const page of pages) {
-          // Check if the scan has been cancelled
-          if (progress.cancelled) {
-            progressCallback(`Scan ${scanId} has been cancelled.`);
-            break; // Exit the loop to stop scanning
-          }
+        // Get Puppeteer options from self.options.puppeteer or use default empty object
+        const puppeteerOptions = self.options.puppeteer || {};
 
-          progressCallback(`Scanning page ${scannedCount + 1} of ${pages.length}: ${page}`);
+        // Initialize Puppeteer
+        let browser;
+        try {
+          browser = await puppeteer.launch(puppeteerOptions);
+          console.log('Puppeteer launched', browser);
 
-          try {
-            const pageResult = await self.scanSinglePage(page, ruleset);
-            if (pageResult) {
-              results.push(pageResult);
+          for (const page of pages) {
+            // Check if the scan has been cancelled
+            if (progress.cancelled) {
+              progressCallback(`Scan ${scanId} has been cancelled.`);
+              break; // Exit the loop to stop scanning
             }
-          } catch (error) {
-            console.error(`Error scanning page ${page}: ${error.message}`);
+
+            progressCallback(`Scanning page ${scannedCount + 1} of ${pages.length}: ${page}`);
+
+            try {
+              const pageResult = await self.scanSinglePage(page, ruleset, browser);
+              if (pageResult) {
+                results.push(pageResult);
+              }
+            } catch (error) {
+              console.error(`Error scanning page ${page}: ${error.message}`);
+            }
+
+            scannedCount++;
+            progress.scannedCount = scannedCount;
+            progress.currentPage = page;
           }
 
-          scannedCount++;
-          progress.scannedCount = scannedCount;
-          progress.currentPage = page;
+          progressCallback(`Scan complete. Scanned ${results.length} pages successfully`);
+        } catch (error) {
+          console.error(`Error during scan: ${error.message}`);
+        } finally {
+          if (browser) {
+            await browser.close();
+          }
+          scanProgress.delete(scanId);
         }
-
-        progressCallback(`Scan complete. Scanned ${results.length} pages successfully`);
-        scanProgress.delete(scanId);
         return results;
       }
     }

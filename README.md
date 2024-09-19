@@ -26,33 +26,122 @@ Pally Extension is a modern ApostropheCMS module that integrates Pa11y to perfor
 
    In your `app.js` (or equivalent) file, register the Pally Extension module:
 
-```javascript
-     modules: {
-       // ... other modules ...
+   ```javascript
+   modules: {
+     // ... other modules ...
 
-       '@bodonkey/pally-extension': {
-         // Module options can be specified here
-       }
+     '@bodonkey/pally-extension': {
+       // Module options can be specified here
      }
-   };
-```
+   }
+   ```
 
 ### Database
-When this module is installed, it creates a new collection in your MongoDB called pa11y-results. If you uninstall this extension you will need to delete this collection manually.
+
+When this module is installed, it creates a new collection in your MongoDB called `pa11y-results`. If you uninstall this extension, you will need to delete this collection manually.
+
+### Additional Setup for Ubuntu, CentOS, & WSL
+
+If you are using WSL, Ubuntu, or CentOS, you will need to install some additional dependencies to ensure Puppeteer (used by Pa11y) runs correctly.
+
+#### WSL
+
+For WSL, follow these steps:
+
+1. **Update Package List**:
+   Make sure your package lists are up to date:
+   
+```bash
+sudo apt-get update
+```
+
+2. **Installing Required Dependencies**:
+   Install the following packages:
+
+```bash
+sudo apt install libgtk-3-dev libnotify-dev libgconf-2-4 libnss3 libxss1 libasound2
+```
+
+#### Ubuntu
+
+For a standard Ubuntu setup, follow these steps:
+
+1. **Update Package List**:
+   Run the following to update your package list:
+   ```bash
+   sudo apt-get update
+   ```
+
+2. **Install Required Dependencies**:
+   Install the necessary packages for Chromium and Puppeteer:
+   ```bash
+   sudo apt install libnss3 libxss1 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libgbm1 libxkbcommon0 libxcomposite1 libasound2 libwayland-client0 libwayland-egl1 libwayland-server0 libappindicator3-1 libdbusmenu-glib4 libdbusmenu-gtk3-4
+   ```
+
+3. **Install Chromium**:
+   Since Puppeteer may not always download the correct version of Chromium, install it manually:
+   ```bash
+   sudo apt install chromium-browser
+   ```
+
+4. **Configure Puppeteer**:
+   Point Puppeteer to the installed Chromium:
+   ```javascript
+   const browser = await puppeteer.launch({
+     executablePath: '/usr/bin/chromium-browser'
+   });
+   ```
+
+#### CentOS
+
+For CentOS, follow these steps:
+
+1. **Update Packages**:
+   Ensure your package manager is up to date:
+   ```bash
+   sudo yum update -y
+   ```
+
+2. **Install Dependencies**:
+   Install required packages to run Chromium and Puppeteer:
+   ```bash
+   sudo yum install -y libX11 libxkbcommon libXScrnSaver libatk libgtk3 dbus-libs libXtst nss alsa-lib
+   ```
+
+3. **Install Chromium**:
+   Enable the EPEL (Extra Packages for Enterprise Linux) repository to install Chromium:
+   ```bash
+   sudo yum install -y epel-release
+   sudo yum install -y chromium
+   ```
+
+4. **Configure Puppeteer**:
+   Similar to Ubuntu, specify the executable path to Chromium for Puppeteer:
+   ```javascript
+   const browser = await puppeteer.launch({
+     executablePath: '/usr/bin/chromium-browser',
+     args: ['--no-sandbox', '--disable-setuid-sandbox'] // To resolve sandboxing issues on some servers
+   });
+   ```
 
 ## Configuration
 
-Pally Extension offers several configurable options to tailor its behavior to your project's needs. These can be set in the module configuration within `app.js`.
+Pally Extension offers several configurable options to tailor its behavior to your project's needs. These options can be set in the module configuration within `app.js`.
 
 ### Available Options
 
-  | Option       | Type    | Default | Description                                 |
-  | ------------ | ------- | ------- | ------------------------------------------- |
-  | `maxPages`   | Number  | `500`   | Maximum number of pages to scan per website. |
-  | `includeWarnings` | Boolean | `true` | Whether to include warnings in scan results. |
-  | `includeNotices` | Boolean | `true` | Whether to include notices in scan results. |
+| Option            | Type    | Default | Description                                                                 |
+| ----------------- | ------- | ------- | --------------------------------------------------------------------------- |
+| `maxPages`        | Number  | 10      | The maximum number of pages to scan.                                        |
+| `includeWarnings` | Boolean | false   | Whether to include warnings in scan results.                                |
+| `includeNotices`  | Boolean | false   | Whether to include notices in scan results.                                 |
+| `puppeteer`       | Object  | {}      | Puppeteer launch configuration. You can specify any valid Puppeteer options.|
 
-### Example Configuration
+#### Puppeteer Options
+
+The `puppeteer` option allows you to pass custom configuration settings for Puppeteer. This is useful for adjusting settings like the headless mode, specifying a custom Chromium executable path, or adding arguments to Puppeteer.
+
+**Example Configuration:**
 
 ```javascript
 modules: {
@@ -60,7 +149,12 @@ modules: {
     options: {
       maxPages: 10,
       includeWarnings: false,
-      includeNotices: false
+      includeNotices: false,
+      puppeteer: {
+        headless: true, // Run in headless mode
+        args: ['--no-sandbox', '--disable-setuid-sandbox'], // For environments requiring specific arguments
+        executablePath: '/usr/bin/chromium-browser' // Specify a custom Chromium executable path
+      }
     }
   }
 }
@@ -79,19 +173,18 @@ modules: {
    The scan will begin asynchronously, and progress will be displayed in real-time.
 
 ### Cancelling a Scan
-- Scanning numerous pages can take a long time. You can also have an issue where the site scanner follows a link inappropriately and begins the scan of an undesired site. In that case, just click the cancel scan button below the progress bar.
+
+- Scanning numerous pages can take a long time. If the scanner follows an undesired link or begins scanning an undesired site, click the cancel scan button below the progress bar.
 
 ### Viewing Scan History
 
 - Navigate to the `History` section within the Pally Dashboard to view past scan results.
 - Each entry includes details such as the scan date, URL, ruleset used, and the number of errors, warnings, and notices found.
 
-
 ### Clearing Scan History
 
 - Use the clear history button below the scan list to delete all scan records.
 - To delete a specific scan record, use the delete button within the scan item.
-
 
 ## Contributing
 

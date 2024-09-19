@@ -1,6 +1,6 @@
 {
   "name": "@bodonkey/pally-extension",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "This extension adds the a pa11y dashboard to your ApostropheCMS project",
   "main": "index.js",
   "scripts": {
@@ -12,6 +12,7 @@
     "axios": "^1.7.7",
     "cheerio": "^1.0.0",
     "fast-xml-parser": "^4.5.0",
-    "pa11y": "^8.0.0"
+    "pa11y": "^8.0.0",
+    "puppeteer": "^23.3.1"
   }
 }

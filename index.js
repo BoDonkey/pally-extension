@@ -23,6 +23,9 @@ module.exports = {
     await self.ensurePa11yCollection();
     await self.ensurePa11yIndexes();
   },
+  icons: {
+    human: 'Human'
+  },
   methods(self) {
     return {
       addManagerModal() {
@@ -35,7 +38,12 @@ module.exports = {
       addToAdminBar() {
         self.apos.adminBar.add(
           'pally-dashboard',
-          'pally-dashboard'
+          'pally-dashboard',
+          false,
+          {
+            contextUtility: true,
+            icon: 'human'
+          }
         );
       },
       async ensurePa11yCollection() {

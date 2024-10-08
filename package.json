@@ -1,6 +1,6 @@
 {
   "name": "@bodonkey/pally-extension",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "This extension adds the a pa11y dashboard to your ApostropheCMS project",
   "main": "index.js",
   "scripts": {

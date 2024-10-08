@@ -1,5 +1,6 @@
 # Pally Extension for ApostropheCMS
-![Screenshot of the main pally-dashboard](./images/pa11y-dashboard.png)
+<img width="1468" alt="Screenshot of the main pa11y-dashboard" src="https://github.com/user-attachments/assets/a0fbcd47-acce-47e9-a32d-377d261eb50e">
+
 Pally Extension is a modern ApostropheCMS module that integrates Pa11y to perform accessibility audits on your website. It provides functionalities to crawl your site, scan pages for accessibility issues, manage scan results, and monitor scan progress — all within the ApostropheCMS admin interface.
 
 ## Features
@@ -196,7 +197,7 @@ modules: {
 ## Usage
 
 ### Starting a Scan
-![Screenshot of the pally-dashboard icon added to the admin-bar](./images/pa11y-icon.png)
+<img width="190" alt="Screenshot of the pally-dashboard icon added to the admin-bar" src="https://github.com/user-attachments/assets/308d8774-800b-4639-93e4-c576d9e92298">
 
 - Click on the Pally Dashboard icon added to the admin bar.
 - Enter the URL of the website you wish to scan (it is pre-populated with the `baseURL` of your site).

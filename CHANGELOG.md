@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.3 - 2024-10-09
+
+- Version bump for publication
+
 ## 1.1.1 - 2024-09-19
 
 - Update README for better Linux installation

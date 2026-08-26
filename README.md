@@ -253,7 +253,7 @@ This project is licensed under the [MIT License](https://github.com/BoDonkey/pal
 
 ## Support
 
-For support or questions, please open an issue on the [GitHub repository](https://github.com/@bodonkey/pally-extension).
+For support or questions, please open an issue on the [GitHub repository](https://github.com/BoDonkey/pally-extension/issues).
 
 # Acknowledgements
 

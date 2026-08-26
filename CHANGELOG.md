@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.5 - UNRELEASED
+
+- Fix the support link in the README. It pointed at `github.com/@bodonkey/pally-extension`; GitHub owner paths take no `@` prefix, so it 404ed. It now points at the repository issues page.
+
 ## 1.1.3 - 2024-10-09
 
 - Version bump for publication
